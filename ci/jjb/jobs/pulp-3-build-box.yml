@@ -1,0 +1,32 @@
+- job:
+    name: pulp-3-build-box
+    concurrent: true
+    node: 'fedora-np'
+    parameters:
+      - string:
+          name: HOSTNAME
+          default: 10.13.129.54
+      - string:
+          name: USER
+          default: root 
+    properties:
+        - dev-ownership
+    scm:
+      - git:
+          url: https://github.com/ammaritiz/pulp-ci.git
+          branches:
+            - 'packer-2908'
+    triggers:
+        - timed: "H 2 * * *"
+    wrappers:
+      - jenkins-ssh-credentials
+    builders:
+      - shell: |
+          sudo dnf -y install ansible
+          echo "${HOSTNAME} ansible_user=${USER}" > hosts
+          export ANSIBLE_HOST_KEY_CHECKING=False
+          ansible-playbook --user ${USER} -i hosts \
+            ci/ansible/pulp_build_box.yml
+    publishers:
+        # - email-notify-owners
+        - mark-node-offline

@@ -1,0 +1,52 @@
+---
+- name: Get user's home directory
+  getent:
+    database: passwd
+    key: '{{ ansible_user }}'
+    split: ':'
+
+- name: Set variable referencing user's home directory
+  set_fact:
+    ansible_user_home: "{{ getent_passwd[ansible_user][4] }}"
+
+- name: Export packer template
+  template:
+    src: pulpcore.json.jj2
+    dest: "{{ ansible_user_home }}/pulpcore.json"
+
+- name: Export Vagrantfile template
+  template:
+    src: Vagrantfile.jj2
+    dest: "{{ ansible_user_home }}/Vagrantfile"
+
+- name: Download installation playbook
+  get_url:
+    url: https://raw.githubusercontent.com/pulp/devel/3.0-dev/ansible/deploy-pulp3.yml
+    dest: "{{ ansible_user_home }}"
+
+- name: Download requirements.yml
+  get_url:
+    url: https://raw.githubusercontent.com/pulp/devel/3.0-dev/ansible/requirements.yml
+    dest: "{{ ansible_user_home }}"
+
+- name: Install ansible
+  package:
+    name: ansible
+    state: installed
+
+- name: Install ansible galaxy roles
+  command: ansible-galaxy install -r requirements.yml
+
+- name: Reboot Server
+  command: /sbin/shutdown -r
+  async: 0
+  poll: 0
+
+- name: Wait for remote host to reboot
+  wait_for_connection:
+    delay: 60
+  
+- name: Build image
+  command: packer build -force -parallel=false {{ ansible_user_home }}/pulpcore.json
+  async: 0
+  poll: 0
